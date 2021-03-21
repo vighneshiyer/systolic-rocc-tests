@@ -19,6 +19,9 @@
 // Accelerator interface
 #include "rocc-software/src/xcustom.h"
 
+// Counter Definition
+#include "include/gemmini_counter.h"
+
 #define k_CONFIG 0
 #define k_MVIN2 1
 #define k_MVIN 2
@@ -36,6 +39,8 @@
 #define k_LOOP_WS_CONFIG_STRIDES_DC 13
 
 #define k_MVIN3 14
+
+#define k_COUNTER 126
 
 #define k_LOOP_CONV_WS 15
 #define k_LOOP_CONV_WS_CONFIG_1 16
@@ -271,6 +276,49 @@ acc_scale_t_bits acc_scale_t_to_acc_scale_t_bits(acc_scale_t x) {
 
 // fence
 #define gemmini_fence() asm volatile("fence")
+
+// Counter access
+#define gemmini_counter_access(rd, config_reg) \
+  { \
+    uint32_t _placeholder; \
+    ROCC_INSTRUCTION(XCUSTOM_ACC, rd, config_reg, _placeholder, k_COUNTER) \
+  }
+
+// Read counter
+static uint32_t counter_read(size_t index) {
+  uint32_t config_reg = (index & 0x7);
+  uint32_t res;
+  gemmini_counter_access(res, config_reg);
+  return res;
+}
+
+// Configure counter to take a new signal
+static void counter_configure(size_t index, size_t counter_code, bool external) {
+  uint32_t config_reg = (index & 0x7) | 0x40 | (counter_code & 0x1f) << 7 | external << 31;
+  uint32_t placeholder;
+  gemmini_counter_access(placeholder, config_reg);
+}
+
+// Take a snapshot
+static void counter_snapshot_take() {
+  uint32_t config_reg = 0x20;
+  uint32_t placeholder;
+  gemmini_counter_access(placeholder, config_reg);
+}
+
+// Counter snapshot reset
+static void counter_snapshot_reset() {
+  uint32_t config_reg = 0x10;
+  uint32_t placeholder;
+  gemmini_counter_access(placeholder, config_reg);
+}
+
+// Counter module reset
+static void counter_reset() {
+  uint32_t config_reg = 0x8;
+  uint32_t placeholder;
+  gemmini_counter_access(placeholder, config_reg);
+}
 
 // weight-stationary matmul loop
 #define gemmini_loop_ws(I, J, K, pad_I, pad_J, pad_K, A, B, D, C, A_stride, B_stride, D_stride, C_stride, A_transpose, B_transpose, full_C, low_D, ex_accumulate) \
